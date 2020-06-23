@@ -1,0 +1,250 @@
+Musat Mihai-Robert
+Grupa 332CB
+
+Tema 2 ASC - Optimizare de cod - inmultire de matrice (C = B * At  + A^2 * B)
+-----------------------------------------------------------------------------
+
+Task 1 - blas
+-------------
+
+Pentru implementarea acestui task, am folosit o functie de nivel 3 din 
+header-ul cblas.h, si anume cblas_dtrmm.Mai intai mi-am creat o copie a 
+lui B deoarece cblas_dtrmm[1] suprascrie matricea asupra careia se aplica 
+transformarea si ar fi stricat matricea B data ca parametru in functia
+my_solver.Dupa aceea, pot sa retin in matricea B rezultatul inmultirii
+dintre B si At.Astfel, setez layout ca fiind CblasRowMajor deoarece
+matricea B este stocata in memorie linie cu linie, side ca fiind
+CblasRight pentru ca in cazul acestei subexpresii matricea A apare in
+dreapta matricei B, uplo ca fiind CblasUpper deoarece A este superior
+triunghiulara, transa ca fiind CblasTrans deoarece eu am nevoie de At
+(transpusa matricei A), diag ca fiind CblasNonUnit deoarece A nu este
+matrice unitara triunghiulara, dimensiunile lui B ca fiind N, alpha ca 
+fiind 1, matricea A, cu dimensiunea ei dominanta N, si matricea B tot
+cu dimensiunea dominanta egala cu N.Apoi retin in mod analog folosind
+functia cblas_dtrmm in copia lui B, rezultatul inmultirii dintre A
+si copia lui B.Salvez valoarea calculata pentru a nu aparea anumite
+valori incorecte la urmatorul calcul intr-o matrice auxiliara, pe
+care o folosesc sa mai inmultesc in fata inca o data cu A pentru
+a obtine A^2*B.La final, dupa ce am obtinut cei doi termeni, realizez
+adunarea celor doua matrici "de mana" si intorc rezultatul obtinut.
+
+[1]https://software.intel.com/en-us/mkl-developer-reference-c-cblas-trmm
+
+Rezultate teste:
+
+Run=./tema2_blas: N=400: Time=0.052400
+Run=./tema2_blas: N=600: Time=0.115604
+Run=./tema2_blas: N=800: Time=0.206900
+Run=./tema2_blas: N=1000: Time=0.393353
+Run=./tema2_blas: N=1200: Time=0.667499
+Run=./tema2_blas: N=1400: Time=1.046503
+
+
+Task 2 - neopt
+--------------
+
+Acest task isi propune realizarea unei implementari "de mana" fara 
+imbunatatiri, dar tinand totusi cont de faptul ca A este o matrice
+superior triunghiulara.Pentru a realiza acest lucru, am facut in
+primul rand doua functii auxiliare care nu tin neaparat cont de faptul
+ca A este o matrice superior triunghiulara:
+-transpose_matrix(N, A) - intoarce o matrice liniarizata care 
+reprezinta transpusa lui A
+-add_matrix(N, A, B) - intoarce o matrice liniarizata obtinuta ca
+rezultat al adunarii matricelor A si B
+In functia my_solver, mai intai calculez primul termen din expresia
+data ca fiind B * At.Atunci cand realizez inmultirea, am grija sa
+iau doar elementele nenule din matricea A si de aceea pun conditia
+pentru for-ul interior ca fiind j <= k < N.Dupa aceea, incep sa imi
+construiesc si cel de-al doilea termen, si calculez matricea A^2
+intr-o matrice auxiliara A2.Si in acest caz, am grija ca sa iau
+doar elementele care sunt nenule, atunci cand inmultesc matricea A cu
+ea insasi.Cum pentru j < i, elementele in A sunt nule, atunci inseamna
+ca pot sa pornesc for-ul pe coloane de la i in loc de 0 si de asemenea
+for-ul dupa k de la i la j inclusiv.Urmatorul pas este inmultirea 
+matricii auxiliare A2 cu B, insa trebuie tinut cont de urmatoarea 
+proprietate: daca A este o matrice triunghiulara, atunci A^2 este tot
+o matrice triunghiulara.De aceea, pornesc for-ul interior dupa k 
+de la i in loc de 0.Dupa ce am obtinut cel de-al doilea termen, 
+ca fiind A^2 * B, si avand deja primul termen calculat, adica
+rezultatul subexpresiei B * At, pur si simplu apelez functia addition 
+despre care am vorbit anterior pentru a  obtine rezultatul final.
+
+Rezultate teste:
+
+Run=./tema2_neopt: N=400: Time=0.719774
+Run=./tema2_neopt: N=600: Time=2.338879
+Run=./tema2_neopt: N=800: Time=5.520965
+Run=./tema2_neopt: N=1000: Time=10.095417
+Run=./tema2_neopt: N=1200: Time=17.738379
+Run=./tema2_neopt: N=1400: Time=28.891436
+
+
+Task 3 - opt_m
+--------------
+
+Pentru realizarea acestui task, am imbunatatit implementarea de la 
+varianta neopt exclusiv la nivel de cod, pentru a obtine performante
+mai bune.Astfel, am urmarit modul de rezolvare al laboratorului 5 si
+am folosit registri, am detectat constantele din bucle si am optimizat 
+accesul la vectori folosind pointeri, atat in cadrul functiei 
+transpose_matrix(N, A), cat si in cadrul functiei add_matrix(N, A, B).
+Dupa ce am implementat aceste doua functii in mod optim, si am lasat 
+vechea implementare in functia my_solver nu am observat insa o schimbare 
+semnificativa a performantei, deoarece partea cu adevarat intensiv 
+computationala a programului era inmultirea de matrici.Am pastrat de la 
+varianta neopt modul in care am realizat buclele, deoarece daca avem A ca 
+fiind superior triunghiulara, nu este nevoie sa mai calculam elementele de 
+sub diagonala principala.Accesul optimizat la vectori cu pointeri foloseste 
+in mod inteligent cache-ul, si aduce numai anumite bucati de linii/coloane
+pe care am elemente nenule astfel incat sa se reduca cache miss-urile.
+Astfel, pentru a obtine primul termen al expresiei, si anume B * At, 
+mai intai calculez transpusa lui A folosind functia transpose_matrix, la 
+care am facut referire anterior si apoi imi setez "de mana" pointerii catre 
+zonele de memorie unde se afla matricele pentru a mai elimina din overhead-ul 
+introdus de compilator pentru a calcula aceste adrese.In mod analog, am 
+construit si cel de-al doilea termen al expresiei, si anume A^2 * B, avand
+grija sa selectez doar elementele nenule din matricea A.La final, dupa
+ce am obtinut cei doi termeni, pur si simplu apelez functia add_matrix,
+mentionata anterior pentru a retine rezultatul final al expresiei.
+
+Rezultate teste:
+
+Run=./tema2_opt_m: N=400: Time=0.215992
+Run=./tema2_opt_m: N=600: Time=0.629593
+Run=./tema2_opt_m: N=800: Time=1.431853
+Run=./tema2_opt_m: N=1000: Time=2.446649
+Run=./tema2_opt_m: N=1200: Time=4.335579 -> este cu cel putin 30% mai mic 
+					    decat timpul variantei neopt
+					    pentru N = 1200
+Run=./tema2_opt_m: N=1400: Time=6.961023
+
+
+Task 4 - opt_f
+--------------
+
+Doar am compilat codul implementat la varianta neopt cu flagul -O3, asa
+cum este precizat in enunt.
+
+Rezultate teste:
+
+Run=./tema2_opt_f: N=400: Time=0.173277
+Run=./tema2_opt_f: N=600: Time=0.522150
+Run=./tema2_opt_f: N=800: Time=1.043461
+Run=./tema2_opt_f: N=1000: Time=1.965711
+Run=./tema2_opt_f: N=1200: Time=3.451119
+Run=./tema2_opt_f: N=1400: Time=5.764877
+
+
+Task 5 - opt_f_extra
+--------------------
+
+Pentru realizarea acestui task, fata de implementarea opt_f, am mai adaugat 
+inca doua flag-uri care mi s-au parut ca ar putea sa imbuntateasca performanta
+programului implementat de mine in varianta neopt.Am incercat mai multe flag-uri
+prezente in lista oficiala de gcc optimization flags din enunt, insa multe 
+dintre acestea nu imbunatateau cu macar 5% performanta.Dupa aceea, mi-am dat
+seama ca trebuie sa am o perspectiva mai critica asupra programului si asupra
+operatiilor executate si sa identific care sunt acele operatii care consuma
+atat de multe resurse, atat ca spatiu, cat si ca timp.Cum din punct de vedere
+al spatiului, memoria programului era oarecum fixata datorita dimensiunii
+matricelor si al variabilelor auxiliare folosite, singura metrica pe care
+puteam sa o imbunatatesc a ramas timpul de executie al programului.Astfel,
+pentru a realiza acest lucru, am folosit doua flag-uri.Primul dintre acestea
+este -ffast-math, care optimizeaza modul in care se realizeaza operatiile 
+matematice.Aceasta optimizare asigura o scadere a timpului cu putin peste 5%,
+pentru dimensiuni mari ale matricelor, si mi-a confirmat faptul ca o mare
+parte din timpul de executie al programului este ocupata de realizarea de 
+adunare/inmultire de elemente de tip double pentru a calcula rezultatul final
+al expresiei.Apoi, am rulat programul folosind flag-ul -funroll-loops, insa
+spre surprinderea mea, desi programul in sine se bazeaza foarte mult pe 
+modul in care sunt realizate buclele, timpul nu a scazut cu mai mult de 3%.
+Acest fapt arata ca loop unrolling practic strica modul in care se realizeaza
+operatiile matematice din interiorul buclelor, prin faptul ca o operatie se
+realizeaza aproximativ la fel de rapid ca si cum as face buclele in mod normal.
+De aceea, am decis sa rulez programul si folosind ambele flag-uri in acelasi timp, 
+pentru a vedea care este impactul cumulat al celor doua optimizari asupra 
+performantei.Asa cum se poate observa din rezultatele testelor, atunci cand se 
+optimizeaza atat modul in care se realizeaza operatiile matematice, cat si modul 
+in care se realizeaza buclele, se produce un impact semnificativ asupra timpului 
+de rulare al testelor si implicit asupra performantei codului, care se imbunatateste
+cu aproximativ 10% fata de varianta opt_f.
+
+Rezultate teste:
+
+1) doar cu -ffast-math
+
+Run=./tema2_opt_f_extra: N=400: Time=0.154339
+Run=./tema2_opt_f_extra: N=600: Time=0.488228
+Run=./tema2_opt_f_extra: N=800: Time=1.052364
+Run=./tema2_opt_f_extra: N=1000: Time=1.755453
+Run=./tema2_opt_f_extra: N=1200: Time=3.206414 -> este cu cel putin 5% mai mic 
+						  decat timpul variantei opt_f
+						  pentru N = 1200 (dar la limita)
+Run=./tema2_opt_f_extra: N=1400: Time=5.230209
+
+
+2) cu -ffast-math si -funroll-loops
+
+Run=./tema2_opt_f_extra: N=400: Time=0.151245
+Run=./tema2_opt_f_extra: N=600: Time=0.395020
+Run=./tema2_opt_f_extra: N=800: Time=0.996209
+Run=./tema2_opt_f_extra: N=1000: Time=1.730100
+Run=./tema2_opt_f_extra: N=1200: Time=3.126227 -> este cu cel putin 5% mai mic 
+						  decat timpul variantei opt_f
+						  pentru N = 1200
+Run=./tema2_opt_f_extra: N=1400: Time=5.123148
+
+Obs: Am rulat programul si doar cu flag-ul -funroll-loops, insa performantele 
+s-au imbunatatit in acest caz cu sub 5% pentru N=1200, asa cum se poate observa 
+si din rezultatele testelor de mai jos:
+
+Run=./tema2_opt_f_extra: N=400: Time=0.165149
+Run=./tema2_opt_f_extra: N=600: Time=0.432877
+Run=./tema2_opt_f_extra: N=800: Time=1.037755
+Run=./tema2_opt_f_extra: N=1000: Time=1.850483
+Run=./tema2_opt_f_extra: N=1200: Time=3.352126
+Run=./tema2_opt_f_extra: N=1400: Time=5.643015
+
+
+Task 6 - analiza comparativa a performantei
+-------------------------------------------
+
+Pentru a putea analiza mai usor performanta pentru cele 5 variante implementate,
+am realizat cate un grafic pentru fiecare varianta in parte, in care am setat
+dimensiunea matricei pe axa Ox si timpul in secunde pe axa Oy, obtinut prin
+rularea programelor pe coada.Astfel, pentru varianta blas, obtinem cei mai
+rapizi timpi dintre toate variantele implementate, si observam ca desi timpul
+creste aproape exponential atunci cand marim dimensiunea matricei cu un pas
+de 200, tot se obtine un timp redus cu mai mult de 50% pentru dimensiuni mari
+ale matricei fata de variantele care folosesc optimizari invatate la curs
+sau la laborator.Urmatorul ca performanta este opt_f_extra in care am folosit
+atat flag-ul -O3, cat si doua flag-uri aditionale: -ffast-math si -funroll-loops.
+Asa cum se poate observa, am plotat separat doua cazuri: primul in care am folosit
+doar flag-ul ffast-math, reprezentat cu linie rosie, si al doilea in care
+am folosit ambele flag-uri, reprezentat cu linie albastra.Ceea ce este foarte 
+interesant la aceste doua curbe prezentate este ca pentru o dimensiune a matricii 
+de 1000, se obtine aproximativ acelasi timp de rulare, dupa care se observa o 
+imbunatatire mica, dar importanta, din punct de vedere al performantei pentru 
+dimensiuni mai mari de 1000 ale matricelor.Dupa varianta opt_f_extra, ca timp
+de rulare, urmeaza deloc surprinzator, varianta opt_f, care foloseste doar
+flag-ul -O3.Fata de varianta anterioara pentru dimensiuni pana in 1000, se obtin
+cam aceeasi timpi de rualre, insa privind comparativ, aceasta valoare reprezinta
+si un punct din care se vor obtine timpi putin mai slabi pentru varianta opt_f
+fata de varianta opt_f_extra.Apoi, varianta opt_f este urmata in acest top al
+performantei de varianta opt_m, varianta optimizata folosind tehnicile invatate
+in laboratorul 4.De la o dimensiune a matricii de 800, se obtin timpi mult mai 
+slabi pentru varianta opt_m, cu aprope o secunda mai mari, semn ca mai puteam sa 
+optimizez si mai mult modul in care se realizeaza operatiile matematice/buclele.
+Ultima varianta in acest top al performantei este varianta neopt, care scoate
+timp mult mai mari fata de varianta opt_m, chiar si pentru dimensiuni mici 
+ale matricelor.Astfel, pentru N=400, se obtine in varianta neopt un timp 
+de 3 ori mai mare fata de varianta opt_m, si acest raport se pastreaza pana
+la N=1000.De la aceasta dimensiune a matricei incolo, timpul ajunge sa fie
+de pana la 5 ori mai mic in varianta opt_m fata de varianta neopt, semn ca
+modul in care se realizeaza operatiile matematice intensiv computationale,
+precum inmultirea matricelor, are un impact important asupra performantei,
+chiar daca lucram doar cu anumite bucati din matrice, atunci cand avem de 
+inmultit o matrice obisnuita cu o matrice superior triunghiulara.
+
+
